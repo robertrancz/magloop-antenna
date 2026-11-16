@@ -66,7 +66,9 @@ const float HOMING_SPEED   = 800.0;                      // Slow & safe during h
 
 // ── Homing Geometry ────────────────────────────────────────────────────────
 const long HOMING_MAX_TRAVEL    = STEPS_PER_REV * 25L;   // Give up after 25 turns
-const long SWITCH_RELEASE_LIMIT = STEPS_PER_REV / 4;     // A tripped switch must release within 1/4 turn
+// Travelling-nut end-stops: the nut moves one thread pitch per shaft turn (1.5 mm, magloop_endstop.scad).
+// A tripped switch must release within this distance (covers the D2F-L movement differential).
+const long SWITCH_RELEASE_LIMIT = STEPS_PER_REV;         // 1 turn
 const long HOME_BACKOFF         = STEPS_PER_REV / 8;     // Zero = MIN release point + 1/8 turn margin
 
 // ── Band Presets (EEPROM) ──────────────────────────────────────────────────
