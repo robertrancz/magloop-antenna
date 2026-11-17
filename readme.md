@@ -3,8 +3,8 @@
 ### Indoor / Balcony HF Antenna — 40m–10m — Motorized Tuning (LDO NEMA17 0.9° \+ TMC2208)
 
 #### Capacitor: Polaron KP1-8 · 4–250 pF · 5 kV · 8 mm shaft 
-#### Motor: [LDO-42STH48-1684MAC](LDO-42STH48-1684MAC%20RevA.pdf) (Nema 17 Stepper)
-#### TMC2208 Driver [Specification](TMC2208-V3.pdf)
+#### Motor: [LDO-42STH48-1684MAC](./docs/LDO-42STH48-1684MAC%20RevA.pdf) (Nema 17 Stepper)
+#### TMC2208 Driver [Specification](./docs/TMC2208-V3.pdf)
 #### Arduino Nano [Pinout](https://devboards.info/boards/arduino-nano)
 
 ---
