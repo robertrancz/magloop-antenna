@@ -6,6 +6,9 @@
 //           nut cannot rotate and travels one PITCH per shaft turn
 //  - RAIL : bolts to the enclosure floor under the link; guide slot + two
 //           D2F-L switch seats with slotted holes for fine adjustment
+//  - BASE : RAIL + printed NEMA17 face-plate + body pad on ONE floor plate,
+//           so motor shaft and nut guide share the same axis_h (replaces the
+//           commercial L-bracket and a separate pad). Use BASE or RAIL, not both.
 //
 //  Print in PETG, 100 % infill (insulator: no internal air voids), 0.12-0.16 mm
 //  layers. LINK and NUT print with the thread axis vertical (as exported).
@@ -13,7 +16,7 @@
 //  CLI:  openscad -D 'PART="link"' -o link.stl magloop_endstop.scad
 // ============================================================================
 
-PART = "assembly";          // "assembly" | "link" | "nut" | "rail" | "print_all"
+PART = "assembly";          // "assembly" | "link" | "nut" | "rail" | "base" | "print_all"
 
 /* [Capacitor & drive] */
 cap_turns      = 22.5;      // KP1-8 full mechanical travel (measured)
@@ -48,6 +51,20 @@ rail_w         = 36;
 guide_wall_t   = 4;
 sw_zone        = 20;        // switch seat length at each rail end
 
+/* [Motor & coupling - BASE part] */
+mot_w          = 42.3;      // NEMA17 body (LDO drawing: 42.3 max - measure yours, use the real value)
+mot_len        = 48;        // body length (LDO-42STH48: 48 max)
+mot_hole_pitch = 31;        // M3 pattern on the front face
+mot_boss_d     = 22;        // front boss (2 mm high)
+mot_shaft_len  = 24;        // from mounting face to shaft tip
+cpl_len        = 25;        // D19L25 beam coupling
+cpl_bore_depth = 12.5;      // depth of each bore (half the coupling)
+shaft_gap      = 1.5;       // gap between motor shaft tip and LINK stub end inside the coupling
+face_t         = 6;         // printed motor face-plate thickness
+pad_clr        = 0.5;       // gap under the motor body -> shim to touch (body pad is support only)
+pad_len        = 30;        // body pad length (stops short of the rear connector)
+base_w         = 60;        // base width under the motor
+
 /* [Omron D2F-L - verify against your switches] */
 sw_hole_d      = 2.2;       // M2
 sw_hole_pitch  = 6.5;
@@ -68,6 +85,16 @@ fin_reach    = axis_h - base_t - 1;                        // axis -> fin bottom
 wall_top     = min(axis_h - nut_d / 2 - 1.5, base_t + 14);
 lever_gap    = trip_travel + nut_len;                      // distance between the two lever faces
 rail_len     = lever_gap + 2 * sw_zone;
+// Shaft-line positions (X from the LINK clamp face on the KP1-8 side)
+x_thread0    = clamp_len + ins_len;
+rail_x0      = x_thread0 + (thread_len - nut_len) / 2 - trip_travel / 2 - sw_zone;
+cpl_x0       = link_len - cpl_bore_depth;                  // coupling: stub fully in the 8 mm bore
+mot_face_x   = cpl_x0 + cpl_bore_depth + shaft_gap + mot_shaft_len;   // motor mounting face
+pad_h        = axis_h - mot_w / 2;                         // floor -> motor body underside
+
+echo(str("BASE: motor face at X = ", mot_face_x, " mm, body underside at ", pad_h,
+         " mm above the floor (pad printed ", pad_h - pad_clr, " + shims)"));
+echo(str("BASE: motor shaft inside coupling = ", mot_shaft_len - (mot_face_x - (cpl_x0 + cpl_len)), " mm"));
 
 echo(str("Nut travel full range = ", full_travel, " mm, between trip points = ", trip_travel, " mm"));
 echo(str("Link length = ", link_len, " mm (thread ", thread_len, " mm), rail length = ", rail_len, " mm"));
@@ -174,6 +201,64 @@ module rail() {
     }
 }
 
+// ── BASE: rail + motor face-plate + body pad on one floor plate ─────────────
+// Horizontal holes as teardrops so they print without supports (plate printed upright)
+module teardrop_x(d, len) {
+    rotate([0, 90, 0]) linear_extrude(height = len, center = true)
+        rotate(90) union() {
+            circle(d = d);
+            polygon([[0, d / 2 / sin(45)], [-d / 2 * cos(45), d / 2 * sin(45)], [d / 2 * cos(45), d / 2 * sin(45)]]);
+        }
+}
+
+module motor_mount() {
+    // local X: 0 = motor mounting face; plate sits at -face_t..0, motor body at 0..mot_len
+    plate_h = axis_h + mot_hole_pitch / 2 + 6;
+    gusset_y = mot_w / 2 + 1.5;
+    difference() {
+        union() {
+            translate([-face_t, -base_w / 2, 0]) cube([face_t, base_w, plate_h]);
+            // body pad (support only: pad_clr gap, shim to touch)
+            translate([4, -15, 0]) cube([pad_len, 30, pad_h - pad_clr]);
+            // side gussets outside the motor body
+            for (s = [-1, 1])
+                translate([0, s > 0 ? gusset_y : -gusset_y - 5, 0])
+                    rotate([90, 0, 0]) translate([0, 0, -5])
+                        linear_extrude(height = 5)
+                            polygon([[-eps, 0], [mot_len * 0.8, 0], [-eps, plate_h - 4]]);
+        }
+        // shaft + boss clearance, 4 x M3 (screw from the coupling side: M3 x 10)
+        translate([-face_t / 2, 0, axis_h]) teardrop_x(mot_boss_d + 1, face_t + 2);
+        for (y = [-1, 1], z = [-1, 1])
+            translate([-face_t / 2, y * mot_hole_pitch / 2, axis_h + z * mot_hole_pitch / 2])
+                teardrop_x(3.4, face_t + 2);
+        // M3 head counterbores on the coupling side, 3 mm deep
+        for (y = [-1, 1], z = [-1, 1])
+            translate([-face_t - eps, y * mot_hole_pitch / 2, axis_h + z * mot_hole_pitch / 2])
+                rotate([0, 90, 0]) cylinder(d = 6.2, h = 3);
+        // zip-tie slot through the pad (optional body strap)
+        translate([4 + pad_len / 2 - 2, -20, pad_h - pad_clr - 6]) cube([4, 40, 2.5]);
+    }
+}
+
+module base() {
+    // origin = rail start (same as rail()), X along the shaft towards the motor
+    m0 = mot_face_x - rail_x0;                                   // motor face in base coords
+    union() {
+        rail();
+        difference() {
+            union() {
+                // floor bridge rail -> motor area, and motor area floor
+                translate([rail_len - eps, -rail_w / 2, 0]) cube([m0 - face_t - rail_len + 2 * eps, rail_w, base_t]);
+                translate([m0 - face_t, -base_w / 2, 0]) cube([face_t + mot_len * 0.8, base_w, base_t]);
+            }
+            for (x = [m0 + 10, m0 + mot_len * 0.8 - 8], y = [-base_w / 2 + 5, base_w / 2 - 5])
+                translate([x, y, -eps]) cylinder(d = 4.4, h = base_t + 2);
+        }
+        translate([m0, 0, 0]) motor_mount();
+    }
+}
+
 // ── Ghost switch (for assembly view only) ──────────────────────────────────
 module ghost_switch(x_lever_face, dir) {
     color("dimgray", 0.8)
@@ -188,20 +273,19 @@ module ghost_switch(x_lever_face, dir) {
 if (PART == "link") link();
 else if (PART == "nut") nut();
 else if (PART == "rail") rail();
+else if (PART == "base") base();
 else if (PART == "print_all") {
     link();
     translate([clamp_d + 10, 0, 0]) nut();
-    translate([-rail_len / 2, -clamp_d - rail_w, 0]) rail();
+    translate([-rail_len / 2, -clamp_d - base_w, 0]) base();
 }
 else {
-    // Assembly: link along +X (cap at X = 0), nut at mid travel, rail on the floor
-    x_thread0 = clamp_len + ins_len;
-    rail_x0   = x_thread0 + (thread_len - nut_len) / 2 - trip_travel / 2 - sw_zone;
+    // Assembly: link along +X (cap at X = 0), nut at mid travel, BASE on the floor
     color("orange", 0.9) translate([0, 0, axis_h]) rotate([0, 90, 0]) link();
     color("deepskyblue") translate([x_thread0 + (thread_len - nut_len) / 2, 0, axis_h])
         rotate([0, 90, 0]) rotate([0, 0, 90]) nut();
     translate([rail_x0, 0, 0]) {
-        color("lightgreen") rail();
+        color("lightgreen") base();
         ghost_switch(sw_zone, 1);
         ghost_switch(rail_len - sw_zone, -1);
     }
@@ -214,6 +298,7 @@ else {
         color("sienna") translate([0, 0, 120]) cylinder(d = 40, h = 22);               // drive head
         color("silver") translate([0, 0, 142]) cylinder(d = 8, h = 18);                // shaft
     }
-    color("silver") translate([link_len - 14, 0, axis_h]) rotate([0, 90, 0]) cylinder(d = 19, h = 25); // beam coupling
-    color("black") translate([link_len + 11, -21, axis_h - 21]) cube([48, 42, 42]);                // NEMA17
+    color("silver") translate([cpl_x0, 0, axis_h]) rotate([0, 90, 0]) cylinder(d = 19, h = cpl_len);  // beam coupling
+    color("black") translate([mot_face_x, -mot_w / 2, axis_h - mot_w / 2]) cube([mot_len, mot_w, mot_w]);  // NEMA17
+    color("silver") translate([mot_face_x - mot_shaft_len, 0, axis_h]) rotate([0, 90, 0]) cylinder(d = 5, h = mot_shaft_len);
 }
